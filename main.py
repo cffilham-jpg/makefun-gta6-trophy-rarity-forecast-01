@@ -131,26 +131,16 @@ def case_forecast(case):
                 median = logistic(current_logit - 1.25)
                 spread = 0.58
         elif refresh_transition:
-            start = first_rates[i] if i < len(first_rates) else current
-            start = bounded_rate(start if start is not None else current)
-            # The count profile provides a useful prior for play on the release day.
-            reference = min(99.99, max(0.01, 2.2 * start * (current_players / first_players) ** 0.36))
+            points = trophy_points[i]
+            local = weighted_slope(points[-8:]) if len(points) >= 2 else 0.0
+            shrink = min(0.8, len(points) / 6.0)
+            trend = shrink * local + (1.0 - shrink) * shared_trend
             tier = trophy.get("tier", "bronze")
-            if tier == "platinum":
-                tier_factor = 0.65
-            elif tier == "gold":
-                tier_factor = 0.82
-            elif tier == "silver":
-                tier_factor = 0.93
-            else:
-                tier_factor = 1.0
-            # Chapters are disclosed by their descriptions; main-story progress grows fastest.
-            description = (trophy.get("name", "") + " " + trophy.get("description", "")).lower()
-            if any(term in description for term in ("complete chapter", "complete the final mission", "complete gone fishing")):
-                tier_factor = min(1.12, tier_factor + 0.12)
-            median = min(99.99, max(current, reference * tier_factor))
-            center = 0.82 * logit(median) + 0.18 * current_logit
-            spread = REFRESH_SIGMA
+            trend *= {"platinum": 0.72, "gold": 0.84, "silver": 0.94, "bronze": 1.0}.get(tier, 1.0)
+            projected_change = max(-0.85, min(1.35, trend * horizon_hours))
+            center = current_logit + projected_change
+            median = logistic(center)
+            spread = min(1.5, REFRESH_SIGMA * math.sqrt(max(1.0, horizon_days)))
         else:
             points = trophy_points[i]
             local = weighted_slope(points[-8:]) if len(points) >= 2 else 0.0
